@@ -8,7 +8,8 @@ import {
   describePod,
   deletePod,
   restartPod,
-  getPodMetrics
+  getPodMetrics,
+  createPod
 } from '../controllers/podController.js';
 
 const router = express.Router();
@@ -25,6 +26,9 @@ const writeRoles = ['Admin', 'Developer'];
 
 // GET /api/pod-mgmt/pods                        — list all pods (optional ?namespace=)
 router.get('/pod-mgmt/pods',              authenticateJWT, authorizeRBAC(readRoles), listPods);
+
+// POST /api/pod-mgmt/pods                       — create a new pod
+router.post('/pod-mgmt/pods',             authenticateJWT, authorizeRBAC(writeRoles), createPod);
 
 // GET /api/pod-mgmt/namespaces                  — list all cluster namespaces
 router.get('/pod-mgmt/namespaces',        authenticateJWT, authorizeRBAC(readRoles), listNamespaces);

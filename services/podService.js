@@ -454,5 +454,16 @@ export const podService = {
       metrics.push({ namespace: ns, name: rest.join('/'), ...val });
     }
     return { available: true, metrics };
+  },
+
+  // --------------------------------------------------------------------------
+  // CREATE POD
+  // --------------------------------------------------------------------------
+  createPod: async (namespace, podManifest) => {
+    if (!isReady || !coreApi) {
+      throw new Error('Kubernetes API client is not initialized.');
+    }
+    const res = await coreApi.createNamespacedPod(namespace, podManifest);
+    return res.body;
   }
 };

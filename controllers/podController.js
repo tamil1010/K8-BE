@@ -147,3 +147,49 @@ export const getPodMetrics = async (req, res, next) => {
     next(err);
   }
 };
+
+// ============================================================================
+// POST /api/pods — Create a new pod
+// ============================================================================
+export const createPod = async (req, res, next) => {
+  try {
+    const { name, namespace, image, port, labels, env } = req.body;
+    if (!name || !image) {
+      return res.status(400).json({
+        success: false,
+        message: 'Pod name and container image are required.'
+      });
+    }
+
+    const ns = namespace || 'default';
+
+    // Build the manifest
+    const podManifest = {
+      apiVersion: 'v1',
+      kind: 'Pod',
+      metadata: {
+        name: name,
+        labels: labels || {}
+      },
+      spec: {
+        containers: [
+          {
+            name: name,
+            image: image,
+            ports: port ? [{ containerPort: parseInt(port, 10) }] : [],
+            env: env || [] // [{ name: 'KEY', value: 'VAL' }]
+          }
+        ]
+      }
+    };
+
+    const data = await podService.createPod(ns, podManifest);
+    return res.status(201).json({
+      success: true,
+      message: `Pod "${name}" created successfully in namespace "${ns}".`,
+      data
+    });
+  } catch (err) {
+    next(err);
+  }
+};
