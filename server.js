@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Import routes and error handlers
 import authRoutes from './routes/authRoutes.js';
 import k8sRoutes from './routes/k8sRoutes.js';
+import podRoutes from './routes/podRoutes.js';
 import { notFoundHandler, globalErrorHandler } from './middleware/errorMiddleware.js';
 
 dotenv.config();
@@ -22,9 +23,19 @@ const PORT = process.env.PORT || 8080;
 // HTTP header security
 app.use(helmet());
 
-// Cross-Origin Resource Sharing (allow frontend access)
+// Cross-Origin Resource Sharing
+// Dynamically allow any localhost origin (e.g. 5173, 5174, 5175 etc.)
+// so Vite port increments never break the connection.
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    // Allow any localhost or 127.0.0.1 origin on any port
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS policy: Origin "${origin}" is not allowed.`));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -58,6 +69,9 @@ app.use('/api/auth', authRoutes);
 
 // Mount Protected Kubernetes endpoints
 app.use('/api', k8sRoutes);
+
+// Mount Pods-specific endpoints
+app.use('/api', podRoutes);
 
 // ==========================================
 // FALLBACK & ERROR HANDLERS
