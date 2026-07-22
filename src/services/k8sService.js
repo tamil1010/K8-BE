@@ -98,7 +98,7 @@ const checkClusterHealth = async () => {
     ]);
     
     if (!isClusterHealthy) {
-      console.log('✅ Connected successfully to active Kubernetes cluster (e.g. Minikube).');
+      console.log('✅ Connected successfully to active Kubernetes cluster ');
     }
     isClusterHealthy = true;
   } catch (err) {
@@ -574,8 +574,7 @@ export const k8sService = {
         const percent = totalCap > 0 ? Math.round((totalUsed / totalCap) * 100) : 15;
         return { value: Math.max(1, Math.min(100, percent)) };
       } catch (err) {
-        // Fallback calculation based on Node stats
-        console.warn('Metrics Server Node API failed/uninstalled. Returning estimation.');
+        // Silent fallback calculation when Metrics Server is not installed
       }
     }
 

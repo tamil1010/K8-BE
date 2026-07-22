@@ -43,9 +43,14 @@ app.use(cors({
   credentials: true
 }));
 
-// Request Logger
-app.use(morgan('dev'));
-
+// Request Logger (Pretty-printed multiline JSON format)
+app.use(morgan((tokens, req, res) => {
+  return JSON.stringify({
+    method: tokens.method(req, res),
+    url: tokens.url(req, res),
+    status: Number(tokens.status(req, res))
+  }, null, 2);
+}));
 // Parse incoming JSON payloads
 app.use(express.json());
 

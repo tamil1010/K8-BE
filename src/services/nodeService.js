@@ -49,7 +49,11 @@ export const reinitializeNodeConfig = () => {
     updateSimNodesForContext(kc.getCurrentContext());
     return true;
   } catch (err) {
-    console.warn('[NodeService] Re-init failed:', err.message);
+    console.warn(JSON.stringify({
+      level: 'warn',
+      service: 'NodeService',
+      message: `Re-init failed: ${err.message}`
+    }));
     isReady = false;
     return false;
   }
@@ -66,7 +70,11 @@ try {
   isReady = true;
   updateSimNodesForContext(kc.getCurrentContext());
 } catch (err) {
-  console.warn('[NodeService] KubeConfig init failed:', err.message);
+  console.warn(JSON.stringify({
+    level: 'warn',
+    service: 'NodeService',
+    message: `KubeConfig init failed: ${err.message}`
+  }));
 }
 
 // Helpers

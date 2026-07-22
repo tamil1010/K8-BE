@@ -22,7 +22,11 @@ export const reinitializeDeploymentConfig = () => {
     isReady = true;
     return true;
   } catch (err) {
-    console.warn('[DeploymentService] Re-init failed:', err.message);
+    console.warn(JSON.stringify({
+      level: 'warn',
+      service: 'DeploymentService',
+      message: `Re-init failed: ${err.message}`
+    }));
     isReady = false;
     return false;
   }
@@ -38,7 +42,11 @@ try {
   appsApi = kc.makeApiClient(k8s.AppsV1Api);
   isReady = true;
 } catch (err) {
-  console.warn('[DeploymentService] KubeConfig init failed:', err.message);
+  console.warn(JSON.stringify({
+    level: 'warn',
+    service: 'DeploymentService',
+    message: `KubeConfig init failed: ${err.message}`
+  }));
 }
 
 // Helpers
