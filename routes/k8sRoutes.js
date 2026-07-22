@@ -14,6 +14,11 @@ import {
   getMemoryUsage,
   getEvents
 } from '../controllers/k8sController.js';
+import {
+  getClusters,
+  getCurrentCluster,
+  switchCluster
+} from '../controllers/clusterController.js';
 
 const router = express.Router();
 
@@ -40,6 +45,11 @@ router.get('/metrics/memory', authorizeRBAC(readRoles), getMemoryUsage);
 
 // System events
 router.get('/events', authorizeRBAC(readRoles), getEvents);
+
+// Cluster switcher endpoints
+router.get('/clusters', authorizeRBAC(readRoles), getClusters);
+router.get('/clusters/current', authorizeRBAC(readRoles), getCurrentCluster);
+router.post('/clusters/switch', authorizeRBAC(readRoles), switchCluster);
 
 // WRITE/MODIFY permissions (allowed for Admin and Developer roles only)
 router.post('/pods/:namespace/:name/restart', authorizeRBAC(['Admin', 'Developer']), restartPod);

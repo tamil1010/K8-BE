@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Initialize KubeConfig
-const kc = new k8s.KubeConfig();
+let kc = new k8s.KubeConfig();
 let isClusterHealthy = false;
 
 // Create API Client instances
@@ -12,6 +12,57 @@ let k8sApi = null;
 let appsApi = null;
 let rbacApi = null;
 let customObjectsApi = null;
+
+let simNodes = [];
+
+const updateSimNodesForContext = (context) => {
+  if (context === 'docker-desktop') {
+    simNodes = [
+      { name: 'desktop-control-plane', status: 'Ready', cpuPercent: 28, memoryPercent: 55, version: 'v1.30.1', podsCount: 3 }
+    ];
+  } else if (context === 'kind-k8-dashboard') {
+    simNodes = [
+      { name: 'k8-dashboard-control-plane', status: 'Ready', cpuPercent: 15, memoryPercent: 40, version: 'v1.30.1', podsCount: 2 },
+      { name: 'k8-dashboard-worker', status: 'Ready', cpuPercent: 45, memoryPercent: 60, version: 'v1.30.1', podsCount: 6 },
+      { name: 'k8-dashboard-worker2', status: 'Ready', cpuPercent: 35, memoryPercent: 50, version: 'v1.30.1', podsCount: 5 }
+    ];
+  } else if (context === 'minikube') {
+    simNodes = [
+      { name: 'minikube', status: 'Ready', cpuPercent: 22, memoryPercent: 48, version: 'v1.28.3', podsCount: 4 }
+    ];
+  } else {
+    simNodes = [
+      { name: 'master-node', status: 'Ready', cpuPercent: 32, memoryPercent: 64, version: 'v1.28.2', podsCount: 4 },
+      { name: 'worker-1', status: 'Ready', cpuPercent: 68, memoryPercent: 78, version: 'v1.28.2', podsCount: 5 },
+      { name: 'worker-2', status: 'Ready', cpuPercent: 42, memoryPercent: 55, version: 'v1.28.2', podsCount: 4 },
+      { name: 'worker-3', status: 'Not Ready', cpuPercent: 0, memoryPercent: 0, version: 'v1.28.2', podsCount: 3 }
+    ];
+  }
+};
+
+export const reinitializeK8sConfig = () => {
+  try {
+    const newKc = new k8s.KubeConfig();
+    if (process.env.KUBECONFIG) {
+      newKc.loadFromFile(process.env.KUBECONFIG);
+    } else {
+      newKc.loadFromDefault();
+    }
+    kc = newKc;
+    k8sApi = kc.makeApiClient(k8s.CoreV1Api);
+    appsApi = kc.makeApiClient(k8s.AppsV1Api);
+    rbacApi = kc.makeApiClient(k8s.RbacAuthorizationV1Api);
+    customObjectsApi = kc.makeApiClient(k8s.CustomObjectsApi);
+    
+    updateSimNodesForContext(kc.getCurrentContext());
+    checkClusterHealth();
+    return true;
+  } catch (err) {
+    console.error('[K8sService] Reinitialize failed:', err.message);
+    isClusterHealthy = false;
+    return false;
+  }
+};
 
 try {
   if (process.env.KUBECONFIG) {
@@ -24,6 +75,8 @@ try {
   appsApi = kc.makeApiClient(k8s.AppsV1Api);
   rbacApi = kc.makeApiClient(k8s.RbacAuthorizationV1Api);
   customObjectsApi = kc.makeApiClient(k8s.CustomObjectsApi);
+  
+  updateSimNodesForContext(kc.getCurrentContext());
 } catch (err) {
   console.warn('⚠️  Kubeconfig initialization failed. Defaulting to SIMULATOR mode.', err.message);
 }
@@ -100,7 +153,7 @@ let simDeployments = [
   { name: 'coredns', namespace: 'kube-system', replicasDesired: 2, replicasAvailable: 2, replicasUpdated: 2, creationTimestamp: new Date(Date.now() - 1000000000), health: 'Healthy' }
 ];
 
-let simNodes = [
+simNodes = [
   { name: 'master-node', status: 'Ready', cpuPercent: 32, memoryPercent: 64, version: 'v1.28.2', podsCount: 4 },
   { name: 'worker-1', status: 'Ready', cpuPercent: 68, memoryPercent: 78, version: 'v1.28.2', podsCount: 5 },
   { name: 'worker-2', status: 'Ready', cpuPercent: 42, memoryPercent: 55, version: 'v1.28.2', podsCount: 4 },

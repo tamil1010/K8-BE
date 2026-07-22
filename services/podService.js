@@ -7,11 +7,32 @@ dotenv.config();
 // KUBERNETES CLIENT INITIALIZATION
 // ============================================================================
 
-const kc = new k8s.KubeConfig();
+let kc = new k8s.KubeConfig();
 let coreApi = null;
 let appsApi = null;
 let customObjectsApi = null;
 let isReady = false;
+
+export const reinitializePodConfig = () => {
+  try {
+    const newKc = new k8s.KubeConfig();
+    if (process.env.KUBECONFIG) {
+      newKc.loadFromFile(process.env.KUBECONFIG);
+    } else {
+      newKc.loadFromDefault();
+    }
+    kc = newKc;
+    coreApi = kc.makeApiClient(k8s.CoreV1Api);
+    appsApi = kc.makeApiClient(k8s.AppsV1Api);
+    customObjectsApi = kc.makeApiClient(k8s.CustomObjectsApi);
+    isReady = true;
+    return true;
+  } catch (err) {
+    console.warn('[PodService] Re-init failed:', err.message);
+    isReady = false;
+    return false;
+  }
+};
 
 try {
   if (process.env.KUBECONFIG) {

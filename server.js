@@ -9,6 +9,8 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import k8sRoutes from './routes/k8sRoutes.js';
 import podRoutes from './routes/podRoutes.js';
+import deploymentRoutes from './routes/deploymentRoutes.js';
+import nodeRoutes from './routes/nodeRoutes.js';
 import { notFoundHandler, globalErrorHandler } from './middleware/errorMiddleware.js';
 
 dotenv.config();
@@ -72,6 +74,12 @@ app.use('/api', k8sRoutes);
 
 // Mount Pods-specific endpoints
 app.use('/api', podRoutes);
+
+// Mount Deployments-specific endpoints
+app.use('/api', deploymentRoutes);
+
+// Mount Nodes-specific endpoints
+app.use('/api', nodeRoutes);
 
 // ==========================================
 // FALLBACK & ERROR HANDLERS
