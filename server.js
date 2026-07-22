@@ -6,12 +6,12 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
 // Import routes and error handlers
-import authRoutes from './routes/authRoutes.js';
-import k8sRoutes from './routes/k8sRoutes.js';
-import podRoutes from './routes/podRoutes.js';
-import deploymentRoutes from './routes/deploymentRoutes.js';
-import nodeRoutes from './routes/nodeRoutes.js';
-import { notFoundHandler, globalErrorHandler } from './middleware/errorMiddleware.js';
+import authRoutes from './src/routes/authRoutes.js';
+import k8sRoutes from './src/routes/k8sRoutes.js';
+import podRoutes from './src/routes/podRoutes.js';
+import deploymentRoutes from './src/routes/deploymentRoutes.js';
+import nodeRoutes from './src/routes/nodeRoutes.js';
+import { notFoundHandler, globalErrorHandler } from './src/middleware/errorMiddleware.js';
 
 dotenv.config();
 

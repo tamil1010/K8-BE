@@ -3,7 +3,7 @@ import { reinitializeK8sConfig } from '../services/k8sService.js';
 import { reinitializeNodeConfig } from '../services/nodeService.js';
 import { reinitializeDeploymentConfig } from '../services/deploymentService.js';
 import { reinitializePodConfig } from '../services/podService.js';
-import k8s from '@kubernetes/client-node';
+import * as k8s from '@kubernetes/client-node';
 
 // Fallbacks for simulator/offline mode
 let mockCurrentContext = 'docker-desktop';
