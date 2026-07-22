@@ -9,7 +9,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@kubernetes/client-node": "^0.20.0",
+    "@kubernetes/client-node": "^1.4.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
