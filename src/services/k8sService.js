@@ -161,12 +161,13 @@ simNodes = [
 ];
 
 let simServices = [
-  { name: 'kubernetes', namespace: 'default', type: 'ClusterIP', clusterIP: '10.96.0.1', externalIP: 'None', ports: '443/TCP', creationTimestamp: new Date(Date.now() - 1000000000) },
-  { name: 'frontend-svc', namespace: 'default', type: 'NodePort', clusterIP: '10.96.12.80', externalIP: 'None', ports: '80:31080/TCP', creationTimestamp: new Date(Date.now() - 900000) },
-  { name: 'backend-api-svc', namespace: 'production', type: 'ClusterIP', clusterIP: '10.96.45.101', externalIP: 'None', ports: '8080/TCP', creationTimestamp: new Date(Date.now() - 18000000) },
-  { name: 'payment-lb', namespace: 'production', type: 'LoadBalancer', clusterIP: '10.96.50.200', externalIP: '34.120.45.89', ports: '80:32001/TCP', creationTimestamp: new Date(Date.now() - 5000000) },
-  { name: 'redis-svc', namespace: 'staging', type: 'ClusterIP', clusterIP: '10.96.220.10', externalIP: 'None', ports: '6379/TCP', creationTimestamp: new Date(Date.now() - 300000000) },
-  { name: 'kube-dns', namespace: 'kube-system', type: 'ClusterIP', clusterIP: '10.96.0.10', externalIP: 'None', ports: '53/UDP, 53/TCP', creationTimestamp: new Date(Date.now() - 1000000000) }
+  { name: 'kubernetes', namespace: 'default', type: 'ClusterIP', clusterIP: '10.96.0.1', externalIP: 'None', ports: '443/TCP', port: 443, targetPort: 6443, protocol: 'TCP', selector: { component: 'apiserver' }, labels: { component: 'apiserver', provider: 'kubernetes' }, creationTimestamp: new Date(Date.now() - 1000000000) },
+  { name: 'frontend-svc', namespace: 'default', type: 'NodePort', clusterIP: '10.96.12.80', externalIP: 'None', ports: '80:31080/TCP', port: 80, targetPort: 8080, nodePort: 31080, protocol: 'TCP', selector: { app: 'frontend' }, labels: { app: 'frontend', tier: 'web' }, creationTimestamp: new Date(Date.now() - 900000) },
+  { name: 'backend-api-svc', namespace: 'production', type: 'ClusterIP', clusterIP: '10.96.45.101', externalIP: 'None', ports: '8080/TCP', port: 8080, targetPort: 8080, protocol: 'TCP', selector: { app: 'backend-api' }, labels: { app: 'backend-api', env: 'prod' }, creationTimestamp: new Date(Date.now() - 18000000) },
+  { name: 'payment-lb', namespace: 'production', type: 'LoadBalancer', clusterIP: '10.96.50.200', externalIP: '34.120.45.89', ports: '80:32001/TCP', port: 80, targetPort: 3000, nodePort: 32001, protocol: 'TCP', selector: { app: 'payment' }, labels: { app: 'payment' }, creationTimestamp: new Date(Date.now() - 5000000) },
+  { name: 'redis-svc', namespace: 'staging', type: 'ClusterIP', clusterIP: '10.96.220.10', externalIP: 'None', ports: '6379/TCP', port: 6379, targetPort: 6379, protocol: 'TCP', selector: { app: 'redis' }, labels: { app: 'redis', env: 'staging' }, creationTimestamp: new Date(Date.now() - 300000000) },
+  { name: 'external-db-svc', namespace: 'default', type: 'ExternalName', clusterIP: 'None', externalIP: 'db.external-cloud.com', ports: '5432/TCP', port: 5432, targetPort: 5432, protocol: 'TCP', externalName: 'db.external-cloud.com', selector: {}, labels: { app: 'external-db' }, creationTimestamp: new Date(Date.now() - 400000000) },
+  { name: 'kube-dns', namespace: 'kube-system', type: 'ClusterIP', clusterIP: '10.96.0.10', externalIP: 'None', ports: '53/UDP, 53/TCP', port: 53, targetPort: 53, protocol: 'UDP', selector: { 'k8s-app': 'kube-dns' }, labels: { 'k8s-app': 'kube-dns' }, creationTimestamp: new Date(Date.now() - 1000000000) }
 ];
 
 let simRbac = {
@@ -276,9 +277,11 @@ export const k8sService = {
           notReady: nodes.filter(n => !n.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True')).length
         },
         services: {
-          clusterIP: svcs.filter(s => s.spec?.type === 'ClusterIP').length,
+          clusterIP: svcs.filter(s => (s.spec?.type || 'ClusterIP') === 'ClusterIP').length,
           nodePort: svcs.filter(s => s.spec?.type === 'NodePort').length,
-          loadBalancer: svcs.filter(s => s.spec?.type === 'LoadBalancer').length
+          loadBalancer: svcs.filter(s => s.spec?.type === 'LoadBalancer').length,
+          externalName: svcs.filter(s => s.spec?.type === 'ExternalName').length,
+          total: svcs.length
         }
       };
     }
@@ -302,7 +305,9 @@ export const k8sService = {
       services: {
         clusterIP: simServices.filter(s => s.type === 'ClusterIP').length,
         nodePort: simServices.filter(s => s.type === 'NodePort').length,
-        loadBalancer: simServices.filter(s => s.type === 'LoadBalancer').length
+        loadBalancer: simServices.filter(s => s.type === 'LoadBalancer').length,
+        externalName: simServices.filter(s => s.type === 'ExternalName').length,
+        total: simServices.length
       }
     };
   },
@@ -443,13 +448,20 @@ export const k8sService = {
 
       return res.body.items.map(s => {
         const ports = s.spec?.ports?.map(p => `${p.port}:${p.nodePort || p.targetPort}/${p.protocol}`).join(', ') || '';
+        const extIP = s.spec?.type === 'ExternalName' 
+          ? s.spec?.externalName || 'None'
+          : (s.status?.loadBalancer?.ingress?.[0]?.ip || s.spec?.externalIPs?.[0] || 'None');
         return {
           name: s.metadata?.name || '',
           namespace: s.metadata?.namespace || '',
           type: s.spec?.type || 'ClusterIP',
           clusterIP: s.spec?.clusterIP || 'None',
-          externalIP: s.status?.loadBalancer?.ingress?.[0]?.ip || 'None',
-          ports
+          externalIP: extIP,
+          ports,
+          selector: s.spec?.selector || {},
+          labels: s.metadata?.labels || {},
+          creationTimestamp: s.metadata?.creationTimestamp || new Date(),
+          age: getAge(s.metadata?.creationTimestamp)
         };
       });
     }
@@ -462,9 +474,248 @@ export const k8sService = {
       namespace: s.namespace,
       type: s.type,
       clusterIP: s.clusterIP,
-      externalIP: s.externalIP,
-      ports: s.ports
+      externalIP: s.externalIP || 'None',
+      externalName: s.externalName || '',
+      ports: s.ports,
+      port: s.port,
+      targetPort: s.targetPort,
+      protocol: s.protocol || 'TCP',
+      selector: s.selector || {},
+      labels: s.labels || {},
+      creationTimestamp: s.creationTimestamp,
+      age: getAge(s.creationTimestamp)
     }));
+  },
+
+  // Service Detail fetching with connected Pod endpoints
+  getServiceDetail: async (namespace, name) => {
+    if (isClusterHealthy) {
+      try {
+        const svcRes = await k8sApi.readNamespacedService(name, namespace);
+        const s = svcRes.body;
+        
+        let endpoints = [];
+        try {
+          const epRes = await k8sApi.readNamespacedEndpoints(name, namespace);
+          const subsets = epRes.body?.subsets || [];
+          subsets.forEach(sub => {
+            const addrs = sub.addresses || [];
+            const ports = sub.ports || [];
+            addrs.forEach(addr => {
+              ports.forEach(p => {
+                endpoints.push(`${addr.ip}:${p.port}`);
+              });
+            });
+          });
+        } catch (epErr) {
+          // Endpoint lookup silent fallback
+        }
+
+        const portsFormatted = s.spec?.ports?.map(p => `${p.port}:${p.nodePort || p.targetPort}/${p.protocol}`).join(', ') || 'None';
+        const extIP = s.spec?.type === 'ExternalName' 
+          ? s.spec?.externalName || 'None'
+          : (s.status?.loadBalancer?.ingress?.[0]?.ip || s.spec?.externalIPs?.[0] || 'None');
+
+        return {
+          name: s.metadata?.name || '',
+          namespace: s.metadata?.namespace || '',
+          type: s.spec?.type || 'ClusterIP',
+          clusterIP: s.spec?.clusterIP || 'None',
+          externalIP: extIP,
+          externalName: s.spec?.externalName || '',
+          selector: s.spec?.selector || {},
+          labels: s.metadata?.labels || {},
+          creationTimestamp: s.metadata?.creationTimestamp || new Date(),
+          age: getAge(s.metadata?.creationTimestamp),
+          ports: s.spec?.ports || [],
+          portsFormatted,
+          endpoints
+        };
+      } catch (err) {
+        throw new Error(`Failed to read Service "${name}" in namespace "${namespace}": ${err.message}`);
+      }
+    }
+
+    // Simulator Fallback
+    const svc = simServices.find(s => s.name === name && (s.namespace === namespace || !namespace));
+    if (!svc) {
+      throw new Error(`Service "${name}" not found in namespace "${namespace}".`);
+    }
+
+    const mockEndpoints = svc.type === 'ExternalName' ? [] : [
+      `10.244.0.${Math.floor(Math.random() * 20) + 2}:${svc.targetPort || 8080}`,
+      `10.244.0.${Math.floor(Math.random() * 20) + 22}:${svc.targetPort || 8080}`
+    ];
+
+    return {
+      name: svc.name,
+      namespace: svc.namespace,
+      type: svc.type,
+      clusterIP: svc.clusterIP,
+      externalIP: svc.externalIP || 'None',
+      externalName: svc.externalName || '',
+      selector: svc.selector || {},
+      labels: svc.labels || {},
+      creationTimestamp: svc.creationTimestamp || new Date(),
+      age: getAge(svc.creationTimestamp),
+      portsFormatted: svc.ports,
+      ports: [{ port: svc.port || 80, targetPort: svc.targetPort || 8080, protocol: svc.protocol || 'TCP', nodePort: svc.nodePort }],
+      endpoints: mockEndpoints
+    };
+  },
+
+  // Service YAML Manifest
+  getServiceYaml: async (namespace, name) => {
+    if (isClusterHealthy) {
+      const svcRes = await k8sApi.readNamespacedService(name, namespace);
+      return svcRes.body;
+    }
+
+    const svc = simServices.find(s => s.name === name && (s.namespace === namespace || !namespace));
+    if (!svc) {
+      throw new Error(`Service "${name}" not found in namespace "${namespace}".`);
+    }
+
+    return {
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: {
+        name: svc.name,
+        namespace: svc.namespace,
+        labels: svc.labels || { app: svc.name },
+        creationTimestamp: svc.creationTimestamp
+      },
+      spec: {
+        type: svc.type,
+        clusterIP: svc.clusterIP,
+        externalName: svc.externalName || undefined,
+        selector: svc.selector || {},
+        ports: [
+          {
+            name: 'http',
+            port: svc.port || 80,
+            targetPort: svc.targetPort || 8080,
+            protocol: svc.protocol || 'TCP',
+            nodePort: svc.nodePort || undefined
+          }
+        ]
+      },
+      status: {
+        loadBalancer: svc.type === 'LoadBalancer' ? { ingress: [{ ip: svc.externalIP }] } : {}
+      }
+    };
+  },
+
+  // Create Service
+  createService: async (namespace, serviceData) => {
+    if (isClusterHealthy) {
+      let manifest;
+      if (typeof serviceData === 'string' || serviceData.kind) {
+        manifest = serviceData;
+      } else {
+        manifest = {
+          apiVersion: 'v1',
+          kind: 'Service',
+          metadata: {
+            name: serviceData.name,
+            namespace: namespace || serviceData.namespace || 'default',
+            labels: serviceData.labels || {}
+          },
+          spec: {
+            type: serviceData.type || 'ClusterIP',
+            selector: serviceData.selector || {},
+            externalName: serviceData.type === 'ExternalName' ? serviceData.externalName : undefined,
+            ports: serviceData.ports || [
+              {
+                port: parseInt(serviceData.port, 10),
+                targetPort: parseInt(serviceData.targetPort, 10),
+                protocol: serviceData.protocol || 'TCP'
+              }
+            ]
+          }
+        };
+      }
+      const res = await k8sApi.createNamespacedService(namespace, manifest);
+      return res.body;
+    }
+
+    // Simulator Fallback
+    const name = serviceData.name || (serviceData.metadata && serviceData.metadata.name);
+    const ns = namespace || serviceData.namespace || (serviceData.metadata && serviceData.metadata.namespace) || 'default';
+    const type = serviceData.type || (serviceData.spec && serviceData.spec.type) || 'ClusterIP';
+    const port = parseInt(serviceData.port || (serviceData.spec && serviceData.spec.ports?.[0]?.port) || 80, 10);
+    const targetPort = parseInt(serviceData.targetPort || (serviceData.spec && serviceData.spec.ports?.[0]?.targetPort) || 8080, 10);
+    const protocol = serviceData.protocol || (serviceData.spec && serviceData.spec.ports?.[0]?.protocol) || 'TCP';
+    const selector = serviceData.selector || (serviceData.spec && serviceData.spec.selector) || {};
+    const labels = serviceData.labels || (serviceData.metadata && serviceData.metadata.labels) || { app: name };
+    const externalName = serviceData.externalName || (serviceData.spec && serviceData.spec.externalName) || '';
+
+    const newSvc = {
+      name,
+      namespace: ns,
+      type,
+      clusterIP: type === 'ExternalName' ? 'None' : `10.96.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`,
+      externalIP: type === 'LoadBalancer' ? `35.200.${Math.floor(Math.random() * 100)}.${Math.floor(Math.random() * 100)}` : (type === 'ExternalName' ? externalName : 'None'),
+      externalName,
+      ports: `${port}:${targetPort}/${protocol}`,
+      port,
+      targetPort,
+      protocol,
+      selector,
+      labels,
+      creationTimestamp: new Date()
+    };
+
+    simServices.unshift(newSvc);
+    return newSvc;
+  },
+
+  // Update Service
+  updateService: async (namespace, name, updateData) => {
+    if (isClusterHealthy) {
+      const existing = await k8sApi.readNamespacedService(name, namespace);
+      const manifest = existing.body;
+      if (updateData.labels) manifest.metadata.labels = updateData.labels;
+      if (updateData.selector && manifest.spec) manifest.spec.selector = updateData.selector;
+      if (updateData.ports && manifest.spec) manifest.spec.ports = updateData.ports;
+      
+      const res = await k8sApi.replaceNamespacedService(name, namespace, manifest);
+      return res.body;
+    }
+
+    // Simulator Fallback
+    const svcIdx = simServices.findIndex(s => s.name === name && (s.namespace === namespace || !namespace));
+    if (svcIdx === -1) {
+      throw new Error(`Service "${name}" not found.`);
+    }
+
+    if (updateData.labels) simServices[svcIdx].labels = updateData.labels;
+    if (updateData.selector) simServices[svcIdx].selector = updateData.selector;
+    if (updateData.ports) {
+      const firstPort = updateData.ports[0] || {};
+      simServices[svcIdx].port = firstPort.port || simServices[svcIdx].port;
+      simServices[svcIdx].targetPort = firstPort.targetPort || simServices[svcIdx].targetPort;
+      simServices[svcIdx].protocol = firstPort.protocol || simServices[svcIdx].protocol;
+      simServices[svcIdx].ports = `${simServices[svcIdx].port}:${simServices[svcIdx].targetPort}/${simServices[svcIdx].protocol}`;
+    }
+
+    return simServices[svcIdx];
+  },
+
+  // Delete Service
+  deleteService: async (namespace, name) => {
+    if (isClusterHealthy) {
+      await k8sApi.deleteNamespacedService(name, namespace);
+      return true;
+    }
+
+    // Simulator Fallback
+    const idx = simServices.findIndex(s => s.name === name && (s.namespace === namespace || !namespace));
+    if (idx !== -1) {
+      simServices.splice(idx, 1);
+      return true;
+    }
+    throw new Error(`Service "${name}" in namespace "${namespace}" not found.`);
   },
 
   // RBAC Roles query
