@@ -1,4 +1,4 @@
-import k8s from '@kubernetes/client-node';
+import * as k8s from '@kubernetes/client-node';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -28,7 +28,11 @@ export const reinitializePodConfig = () => {
     isReady = true;
     return true;
   } catch (err) {
-    console.warn('[PodService] Re-init failed:', err.message);
+    console.warn(JSON.stringify({
+      level: 'warn',
+      service: 'PodService',
+      message: `Re-init failed: ${err.message}`
+    }));
     isReady = false;
     return false;
   }
@@ -45,7 +49,11 @@ try {
   customObjectsApi = kc.makeApiClient(k8s.CustomObjectsApi);
   isReady = true;
 } catch (err) {
-  console.warn('[PodService] KubeConfig init failed:', err.message);
+  console.warn(JSON.stringify({
+    level: 'warn',
+    service: 'PodService',
+    message: `KubeConfig init failed: ${err.message}`
+  }));
 }
 
 // ============================================================================

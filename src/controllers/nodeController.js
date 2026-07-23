@@ -86,3 +86,55 @@ export const getNodeMetrics = async (req, res, next) => {
     next(err);
   }
 };
+
+export const cordonNode = async (req, res, next) => {
+  try {
+    const { name } = req.params;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Node name is required.' });
+    }
+    const data = await nodeService.cordonNode(name);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const uncordonNode = async (req, res, next) => {
+  try {
+    const { name } = req.params;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Node name is required.' });
+    }
+    const data = await nodeService.uncordonNode(name);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const drainNode = async (req, res, next) => {
+  try {
+    const { name } = req.params;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Node name is required.' });
+    }
+    const data = await nodeService.drainNode(name);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteNode = async (req, res, next) => {
+  try {
+    const { name } = req.params;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Node name is required.' });
+    }
+    const data = await nodeService.deleteNode(name);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};

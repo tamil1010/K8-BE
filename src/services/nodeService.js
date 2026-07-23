@@ -1,4 +1,4 @@
-import k8s from '@kubernetes/client-node';
+import * as k8s from '@kubernetes/client-node';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -49,7 +49,11 @@ export const reinitializeNodeConfig = () => {
     updateSimNodesForContext(kc.getCurrentContext());
     return true;
   } catch (err) {
-    console.warn('[NodeService] Re-init failed:', err.message);
+    console.warn(JSON.stringify({
+      level: 'warn',
+      service: 'NodeService',
+      message: `Re-init failed: ${err.message}`
+    }));
     isReady = false;
     return false;
   }
@@ -66,7 +70,11 @@ try {
   isReady = true;
   updateSimNodesForContext(kc.getCurrentContext());
 } catch (err) {
-  console.warn('[NodeService] KubeConfig init failed:', err.message);
+  console.warn(JSON.stringify({
+    level: 'warn',
+    service: 'NodeService',
+    message: `KubeConfig init failed: ${err.message}`
+  }));
 }
 
 // Helpers
@@ -182,6 +190,10 @@ export const nodeService = {
     const nodes = nodesRes.body?.items || [];
     const pods = podsRes.body?.items || [];
 
+    // Debugging log for raw Kubernetes nodes
+    console.log("=== RAW KUBERNETES NODES ===");
+    console.log(JSON.stringify(nodes, null, 2));
+
     // Group running/pending pods count by Node
     const podCountMap = new Map();
     pods.forEach(pod => {
@@ -192,9 +204,9 @@ export const nodeService = {
     });
 
     return nodes.map((node) => {
-      const name = node.metadata?.name || '';
-      const status = getNodeStatus(node);
-      const role = getNodeRole(node);
+      const name = node.metadata?.name || 'N/A';
+      const status = getNodeStatus(node) || 'Unknown';
+      const role = getNodeRole(node) || 'Worker';
       const version = node.status?.nodeInfo?.kubeletVersion || 'N/A';
       const os = node.status?.nodeInfo?.osImage || 'N/A';
       const runtime = node.status?.nodeInfo?.containerRuntimeVersion || 'N/A';
@@ -215,10 +227,10 @@ export const nodeService = {
       let memUsagePct = 'N/A';
 
       if (nodeMetrics) {
-        if (cpuAlloc > 0) {
+        if (cpuAlloc > 0 && nodeMetrics.cpuCores !== undefined && nodeMetrics.cpuCores !== null) {
           cpuUsagePct = Math.round((nodeMetrics.cpuCores / cpuAlloc) * 100);
         }
-        if (memAlloc > 0) {
+        if (memAlloc > 0 && nodeMetrics.memMiB !== undefined && nodeMetrics.memMiB !== null) {
           memUsagePct = Math.round((nodeMetrics.memMiB / memAlloc) * 100);
         }
       }
@@ -513,8 +525,8 @@ ${(details.events || []).map(e => `  ${(e.type || 'Normal').padEnd(7)} ${(e.reas
     if (!isReady || !coreApi) {
       // Simulator Fallback
       return [
-        { name: "frontend-v3-8f2ba", namespace: "default", status: "Running", restarts: 0 },
-        { name: "backend-api-5c7d8b-1", namespace: "production", status: "Running", restarts: 0 }
+        { name: "frontend-v3-8f2ba", namespace: "default", status: "Running", restarts: 0, age: "4h" },
+        { name: "backend-api-5c7d8b-1", namespace: "production", status: "Running", restarts: 2, age: "12d" }
       ];
     }
 
@@ -531,7 +543,72 @@ ${(details.events || []).map(e => `  ${(e.type || 'Normal').padEnd(7)} ${(e.reas
       name: pod.metadata?.name || '',
       namespace: pod.metadata?.namespace || '',
       status: pod.status?.phase || 'Unknown',
-      restarts: getTotalRestarts(pod)
+      restarts: getTotalRestarts(pod),
+      age: getAge(pod.metadata?.creationTimestamp)
     }));
+  },
+
+  cordonNode: async (name) => {
+    if (!isReady || !coreApi) {
+      const node = simNodes.find(n => n.name === name);
+      if (node) node.status = 'Not Ready';
+      return { success: true, message: `Node ${name} cordoned (simulated).` };
+    }
+    const patch = [{ op: 'replace', path: '/spec/unschedulable', value: true }];
+    const options = { headers: { 'Content-Type': 'application/json-patch+json' } };
+    await coreApi.patchNode(name, patch, undefined, undefined, undefined, undefined, options);
+    return { success: true };
+  },
+
+  uncordonNode: async (name) => {
+    if (!isReady || !coreApi) {
+      const node = simNodes.find(n => n.name === name);
+      if (node) node.status = 'Ready';
+      return { success: true, message: `Node ${name} uncordoned (simulated).` };
+    }
+    const patch = [{ op: 'replace', path: '/spec/unschedulable', value: false }];
+    const options = { headers: { 'Content-Type': 'application/json-patch+json' } };
+    await coreApi.patchNode(name, patch, undefined, undefined, undefined, undefined, options);
+    return { success: true };
+  },
+
+  drainNode: async (name) => {
+    if (!isReady || !coreApi) {
+      const node = simNodes.find(n => n.name === name);
+      if (node) {
+        node.status = 'Not Ready';
+        node.podsCount = 0;
+      }
+      return { success: true, message: `Node ${name} drained (simulated).` };
+    }
+    const patch = [{ op: 'replace', path: '/spec/unschedulable', value: true }];
+    const options = { headers: { 'Content-Type': 'application/json-patch+json' } };
+    await coreApi.patchNode(name, patch, undefined, undefined, undefined, undefined, options);
+
+    const podsRes = await coreApi.listPodForAllNamespaces(undefined, undefined, undefined, `spec.nodeName=${name}`);
+    const pods = podsRes.body?.items || [];
+
+    for (const pod of pods) {
+      const isMirrorPod = pod.metadata?.annotations?.['kubernetes.io/config.mirror'] !== undefined;
+      const isDaemonSet = pod.metadata?.ownerReferences?.some(ref => ref.kind === 'DaemonSet');
+      
+      if (!isMirrorPod && !isDaemonSet) {
+        const podName = pod.metadata?.name;
+        const namespace = pod.metadata?.namespace;
+        if (podName && namespace) {
+          await coreApi.deleteNamespacedPod(podName, namespace);
+        }
+      }
+    }
+    return { success: true };
+  },
+
+  deleteNode: async (name) => {
+    if (!isReady || !coreApi) {
+      simNodes = simNodes.filter(n => n.name !== name);
+      return { success: true, message: `Node ${name} deleted (simulated).` };
+    }
+    await coreApi.deleteNode(name);
+    return { success: true };
   }
 };
