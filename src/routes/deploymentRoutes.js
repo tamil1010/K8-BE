@@ -10,7 +10,11 @@ import {
   getDeploymentHistory,
   getDeploymentLogs,
   getDeploymentYaml,
-  deleteDeployment
+  deleteDeployment,
+  getDeploymentEvents,
+  getDeploymentPodsList,
+  getDeploymentReplicaSetsList,
+  describeDeploymentDetail
 } from '../controllers/deploymentController.js';
 
 const router = express.Router();
@@ -31,12 +35,6 @@ router.get('/deployment-mgmt/:namespace/:name', authenticateJWT, authorizeRBAC(r
 router.patch('/deployment-mgmt/:namespace/:name/scale', authenticateJWT, authorizeRBAC(writeRoles), scaleDeployment);
 
 // POST /api/deployment-mgmt/:namespace/:name/restart
-router.post('/api/deployment-mgmt/:namespace/:name/restart', (req, res, next) => {
-  // Wait, standardizing route mounts - wait, in server.js, app.use('/api', deploymentRoutes) is used, 
-  // so this route should start with /deployment-mgmt... Let's fix that.
-  next();
-});
-
 router.post('/deployment-mgmt/:namespace/:name/restart', authenticateJWT, authorizeRBAC(writeRoles), restartDeployment);
 
 // POST /api/deployment-mgmt/:namespace/:name/rollback
@@ -53,5 +51,18 @@ router.get('/deployment-mgmt/:namespace/:name/yaml', authenticateJWT, authorizeR
 
 // DELETE /api/deployment-mgmt/:namespace/:name
 router.delete('/deployment-mgmt/:namespace/:name', authenticateJWT, authorizeRBAC(writeRoles), deleteDeployment);
+
+// Enterprise endpoints requested: GET/POST /api/deployments/:name/...
+router.get('/deployments', authenticateJWT, authorizeRBAC(readRoles), listDeployments);
+router.get('/deployments/:name', authenticateJWT, authorizeRBAC(readRoles), getDeployment);
+router.get('/deployments/:name/yaml', authenticateJWT, authorizeRBAC(readRoles), getDeploymentYaml);
+router.get('/deployments/:name/events', authenticateJWT, authorizeRBAC(readRoles), getDeploymentEvents);
+router.get('/deployments/:name/describe', authenticateJWT, authorizeRBAC(readRoles), describeDeploymentDetail);
+router.get('/deployments/:name/pods', authenticateJWT, authorizeRBAC(readRoles), getDeploymentPodsList);
+router.get('/deployments/:name/replicasets', authenticateJWT, authorizeRBAC(readRoles), getDeploymentReplicaSetsList);
+router.get('/deployments/:name/history', authenticateJWT, authorizeRBAC(readRoles), getDeploymentHistory);
+router.post('/deployments/:name/restart', authenticateJWT, authorizeRBAC(writeRoles), restartDeployment);
+router.post('/deployments/:name/rollback', authenticateJWT, authorizeRBAC(writeRoles), rollbackDeployment);
+router.post('/deployments/:name/scale', authenticateJWT, authorizeRBAC(writeRoles), scaleDeployment);
 
 export default router;

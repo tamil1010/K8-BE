@@ -12,9 +12,10 @@ export const listDeployments = async (req, res, next) => {
 
 export const getDeployment = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
-    if (!namespace || !name) {
-      return res.status(400).json({ success: false, message: 'Namespace and Deployment name are required.' });
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
     }
     const data = await deploymentService.getDeployment(namespace, name);
     return res.status(200).json({ success: true, data });
@@ -38,10 +39,11 @@ export const createDeployment = async (req, res, next) => {
 
 export const scaleDeployment = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
-    const { replicas } = req.body;
-    if (!namespace || !name || replicas === undefined) {
-      return res.status(400).json({ success: false, message: 'Namespace, Deployment name, and Replicas count are required.' });
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    const replicas = req.body.replicas;
+    if (!name || replicas === undefined) {
+      return res.status(400).json({ success: false, message: 'Deployment name and Replicas count are required.' });
     }
     const data = await deploymentService.scaleDeployment(namespace, name, replicas);
     return res.status(200).json({ success: true, message: `Deployment scaled to ${replicas} replicas.`, data });
@@ -52,9 +54,10 @@ export const scaleDeployment = async (req, res, next) => {
 
 export const restartDeployment = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
-    if (!namespace || !name) {
-      return res.status(400).json({ success: false, message: 'Namespace and Deployment name are required.' });
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
     }
     const data = await deploymentService.restartDeployment(namespace, name);
     return res.status(200).json({ success: true, message: 'Rolling restart triggered successfully.', data });
@@ -65,10 +68,11 @@ export const restartDeployment = async (req, res, next) => {
 
 export const rollbackDeployment = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
     const { revision } = req.body;
-    if (!namespace || !name || revision === undefined) {
-      return res.status(400).json({ success: false, message: 'Namespace, Deployment name, and Revision number are required.' });
+    if (!name || revision === undefined) {
+      return res.status(400).json({ success: false, message: 'Deployment name and Revision number are required.' });
     }
     const data = await deploymentService.rollbackDeployment(namespace, name, revision);
     return res.status(200).json({ success: true, message: `Deployment rolled back to revision ${revision}.`, data });
@@ -79,9 +83,10 @@ export const rollbackDeployment = async (req, res, next) => {
 
 export const getDeploymentHistory = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
-    if (!namespace || !name) {
-      return res.status(400).json({ success: false, message: 'Namespace and Deployment name are required.' });
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
     }
     const data = await deploymentService.getDeploymentHistory(namespace, name);
     return res.status(200).json({ success: true, data });
@@ -92,9 +97,10 @@ export const getDeploymentHistory = async (req, res, next) => {
 
 export const getDeploymentLogs = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
-    if (!namespace || !name) {
-      return res.status(400).json({ success: false, message: 'Namespace and Deployment name are required.' });
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
     }
     const logs = await deploymentService.getDeploymentLogs(namespace, name);
     return res.status(200).json({ success: true, data: { logs } });
@@ -105,9 +111,10 @@ export const getDeploymentLogs = async (req, res, next) => {
 
 export const getDeploymentYaml = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
-    if (!namespace || !name) {
-      return res.status(400).json({ success: false, message: 'Namespace and Deployment name are required.' });
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
     }
     const data = await deploymentService.getDeploymentYaml(namespace, name);
     return res.status(200).json({ success: true, data });
@@ -118,12 +125,69 @@ export const getDeploymentYaml = async (req, res, next) => {
 
 export const deleteDeployment = async (req, res, next) => {
   try {
-    const { namespace, name } = req.params;
-    if (!namespace || !name) {
-      return res.status(400).json({ success: false, message: 'Namespace and Deployment name are required.' });
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
     }
     await deploymentService.deleteDeployment(namespace, name);
     return res.status(200).json({ success: true, message: `Deployment "${name}" deleted successfully.` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getDeploymentEvents = async (req, res, next) => {
+  try {
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
+    }
+    const data = await deploymentService.getDeploymentEvents(namespace, name);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getDeploymentPodsList = async (req, res, next) => {
+  try {
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
+    }
+    const data = await deploymentService.getDeploymentPods(namespace, name);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getDeploymentReplicaSetsList = async (req, res, next) => {
+  try {
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
+    }
+    const data = await deploymentService.getDeploymentReplicaSets(namespace, name);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const describeDeploymentDetail = async (req, res, next) => {
+  try {
+    const namespace = req.params.namespace || req.query.namespace || req.body.namespace || 'default';
+    const name = req.params.name;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Deployment name is required.' });
+    }
+    const data = await deploymentService.describeDeployment(namespace, name);
+    return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
   }
