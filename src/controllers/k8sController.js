@@ -2,7 +2,8 @@ import { k8sService } from '../services/k8sService.js';
 
 export const getOverview = async (req, res, next) => {
   try {
-    const data = await k8sService.getOverview();
+    const namespace = req.query.namespace === 'All Namespaces' ? '' : (req.query.namespace || '');
+    const data = await k8sService.getOverview(namespace);
     return res.status(200).json({
       success: true,
       data
