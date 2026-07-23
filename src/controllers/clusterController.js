@@ -12,7 +12,7 @@ const mockContexts = ['docker-desktop', 'kind-k8-dashboard', 'minikube'];
 // Helper to run shell commands safely
 const runCommand = (cmd) => {
   try {
-    return execSync(cmd, { encoding: 'utf8' }).trim();
+    return execSync(cmd, { encoding: 'utf8', timeout: 2000 }).trim();
   } catch (err) {
     return null;
   }
