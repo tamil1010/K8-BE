@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 
 // Import routes and error handlers
 import authRoutes from './src/routes/authRoutes.js';
+import rbacRoutes from './src/routes/rbacRoutes.js';
 import serviceRoutes from './src/routes/serviceRoutes.js';
 import k8sRoutes from './src/routes/k8sRoutes.js';
 import podRoutes from './src/routes/podRoutes.js';
@@ -74,6 +75,9 @@ app.use('/api', limiter);
 
 // Mount Public Auth endpoints
 app.use('/api/auth', authRoutes);
+
+// Mount RBAC endpoints
+app.use('/api', rbacRoutes);
 
 // Mount Service-specific endpoints
 app.use('/api', serviceRoutes);

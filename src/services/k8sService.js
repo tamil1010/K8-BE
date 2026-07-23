@@ -172,19 +172,108 @@ let simServices = [
 
 let simRbac = {
   roles: [
-    { name: 'pod-reader', namespace: 'default', createdDate: '2026-06-01T08:00:00Z', permissions: 'pods (get, list, watch)' },
-    { name: 'deployment-manager', namespace: 'production', createdDate: '2026-07-02T10:30:00Z', permissions: 'deployments, replicasets (create, update, patch, get, list)' },
-    { name: 'cluster-admin', namespace: 'kube-system', createdDate: '2026-05-10T12:00:00Z', permissions: '* (*)' }
+    {
+      name: 'pod-reader',
+      namespace: 'default',
+      createdDate: new Date(Date.now() - 50000000).toISOString(),
+      rulesCount: 2,
+      rules: [
+        { apiGroups: [''], resources: ['pods', 'pods/log'], verbs: ['get', 'list', 'watch'] },
+        { apiGroups: [''], resources: ['configmaps'], verbs: ['get'] }
+      ],
+      labels: { app: 'pod-reader-role' }
+    },
+    {
+      name: 'deployment-manager',
+      namespace: 'production',
+      createdDate: new Date(Date.now() - 20000000).toISOString(),
+      rulesCount: 3,
+      rules: [
+        { apiGroups: ['apps'], resources: ['deployments', 'statefulsets', 'replicasets'], verbs: ['create', 'update', 'patch', 'get', 'list', 'delete'] },
+        { apiGroups: [''], resources: ['services'], verbs: ['create', 'update', 'get', 'list'] },
+        { apiGroups: [''], resources: ['pods'], verbs: ['get', 'list', 'watch'] }
+      ],
+      labels: { env: 'prod', tier: 'mgmt' }
+    },
+    {
+      name: 'cluster-admin',
+      namespace: 'kube-system',
+      createdDate: new Date(Date.now() - 100000000).toISOString(),
+      rulesCount: 1,
+      rules: [
+        { apiGroups: ['*'], resources: ['*'], verbs: ['*'] }
+      ],
+      labels: { 'kubernetes.io/bootstrapping': 'rbac-defaults' }
+    },
+    {
+      name: 'secret-viewer',
+      namespace: 'staging',
+      createdDate: new Date(Date.now() - 15000000).toISOString(),
+      rulesCount: 1,
+      rules: [
+        { apiGroups: [''], resources: ['secrets'], verbs: ['get', 'list'] }
+      ],
+      labels: { scope: 'staging' }
+    }
   ],
   bindings: [
-    { name: 'read-pods-binding', namespace: 'default', createdDate: '2026-06-01T08:15:00Z', permissions: 'RoleRef: pod-reader, Subject: User(john)' },
-    { name: 'prod-deploy-binding', namespace: 'production', createdDate: '2026-07-02T10:45:00Z', permissions: 'RoleRef: deployment-manager, Subject: Group(dev-team)' },
-    { name: 'admin-binding', namespace: 'kube-system', createdDate: '2026-05-10T12:05:00Z', permissions: 'RoleRef: cluster-admin, Subject: ServiceAccount(admin-user)' }
+    {
+      name: 'read-pods-binding',
+      namespace: 'default',
+      createdDate: new Date(Date.now() - 48000000).toISOString(),
+      roleRef: { kind: 'Role', name: 'pod-reader', apiGroup: 'rbac.authorization.k8s.io' },
+      subjects: [
+        { kind: 'User', name: 'john.doe', namespace: 'default' },
+        { kind: 'ServiceAccount', name: 'default', namespace: 'default' }
+      ],
+      labels: { app: 'pod-reader-binding' }
+    },
+    {
+      name: 'prod-deploy-binding',
+      namespace: 'production',
+      createdDate: new Date(Date.now() - 18000000).toISOString(),
+      roleRef: { kind: 'Role', name: 'deployment-manager', apiGroup: 'rbac.authorization.k8s.io' },
+      subjects: [
+        { kind: 'Group', name: 'devops-team', namespace: 'production' }
+      ],
+      labels: { env: 'prod' }
+    },
+    {
+      name: 'admin-binding',
+      namespace: 'kube-system',
+      createdDate: new Date(Date.now() - 95000000).toISOString(),
+      roleRef: { kind: 'ClusterRole', name: 'cluster-admin', apiGroup: 'rbac.authorization.k8s.io' },
+      subjects: [
+        { kind: 'ServiceAccount', name: 'admin-user', namespace: 'kube-system' }
+      ],
+      labels: { system: 'admin' }
+    }
   ],
   serviceAccounts: [
-    { name: 'default', namespace: 'default', createdDate: '2026-05-01T00:00:00Z', permissions: 'Secrets: [default-token-xxxxx]' },
-    { name: 'admin-user', namespace: 'kube-system', createdDate: '2026-05-10T11:55:00Z', permissions: 'Secrets: [admin-token-yyyyy]' },
-    { name: 'api-service-sa', namespace: 'production', createdDate: '2026-07-15T09:20:00Z', permissions: 'Secrets: [api-sa-token-zzzzz]' }
+    {
+      name: 'default',
+      namespace: 'default',
+      createdDate: new Date(Date.now() - 100000000).toISOString(),
+      secrets: [{ name: 'default-token-x892a' }],
+      imagePullSecrets: [{ name: 'docker-registry-key' }],
+      labels: { 'kubernetes.io/initial': 'true' }
+    },
+    {
+      name: 'admin-user',
+      namespace: 'kube-system',
+      createdDate: new Date(Date.now() - 98000000).toISOString(),
+      secrets: [{ name: 'admin-user-token-7fba2' }],
+      imagePullSecrets: [],
+      labels: { 'k8s-app': 'dashboard' }
+    },
+    {
+      name: 'api-service-sa',
+      namespace: 'production',
+      createdDate: new Date(Date.now() - 12000000).toISOString(),
+      secrets: [{ name: 'api-sa-token-99c01' }],
+      imagePullSecrets: [{ name: 'ghcr-pull-secret' }],
+      labels: { app: 'backend-api' }
+    }
   ]
 };
 
@@ -247,13 +336,13 @@ export const k8sService = {
   isLive: () => isClusterHealthy,
 
   // Cluster Overview Stats
-  getOverview: async () => {
+  getOverview: async (namespace = '') => {
     if (isClusterHealthy) {
       const [podsList, deplList, nodesList, svcsList] = await Promise.all([
-        k8sApi.listPodForAllNamespaces(),
-        appsApi.listDeploymentForAllNamespaces(),
+        namespace ? k8sApi.listNamespacedPod(namespace) : k8sApi.listPodForAllNamespaces(),
+        namespace ? appsApi.listNamespacedDeployment(namespace) : appsApi.listDeploymentForAllNamespaces(),
         k8sApi.listNode(),
-        k8sApi.listServiceForAllNamespaces()
+        namespace ? k8sApi.listNamespacedService(namespace) : k8sApi.listServiceForAllNamespaces()
       ]);
 
       const pods = podsList.body.items;
@@ -261,20 +350,33 @@ export const k8sService = {
       const nodes = nodesList.body.items;
       const svcs = svcsList.body.items;
 
+      const failedPods = pods.filter(p => p.status?.phase === 'Failed' || p.status?.phase === 'CrashLoopBackOff').length;
+      const pendingPods = pods.filter(p => p.status?.phase === 'Pending').length;
+      const unavailableDepls = depls.filter(d => !d.status?.conditions?.some(c => c.type === 'Available' && c.status === 'True')).length;
+      const notReadyNodes = nodes.filter(n => !n.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True')).length;
+
+      let health = 'Healthy';
+      if (notReadyNodes > 0 || failedPods > 2) {
+        health = 'Critical';
+      } else if (failedPods > 0 || pendingPods > 0 || unavailableDepls > 0) {
+        health = 'Warning';
+      }
+
       return {
+        health,
         pods: {
           running: pods.filter(p => p.status?.phase === 'Running').length,
-          pending: pods.filter(p => p.status?.phase === 'Pending').length,
-          failed: pods.filter(p => p.status?.phase === 'Failed' || p.status?.phase === 'CrashLoopBackOff').length,
+          pending: pendingPods,
+          failed: failedPods,
           completed: pods.filter(p => p.status?.phase === 'Succeeded').length
         },
         deployments: {
           available: depls.filter(d => d.status?.conditions?.some(c => c.type === 'Available' && c.status === 'True')).length,
-          unavailable: depls.filter(d => !d.status?.conditions?.some(c => c.type === 'Available' && c.status === 'True')).length
+          unavailable: unavailableDepls
         },
         nodes: {
           ready: nodes.filter(n => n.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True')).length,
-          notReady: nodes.filter(n => !n.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True')).length
+          notReady: notReadyNodes
         },
         services: {
           clusterIP: svcs.filter(s => (s.spec?.type || 'ClusterIP') === 'ClusterIP').length,
@@ -287,27 +389,50 @@ export const k8sService = {
     }
 
     // Simulator Fallback
+    let pList = simPods;
+    let dList = simDeployments;
+    let sList = simServices;
+
+    if (namespace) {
+      pList = simPods.filter(p => p.namespace === namespace);
+      dList = simDeployments.filter(d => d.namespace === namespace);
+      sList = simServices.filter(s => s.namespace === namespace);
+    }
+
+    const failedPods = pList.filter(p => p.status === 'CrashLoopBackOff').length;
+    const pendingPods = pList.filter(p => p.status === 'Pending').length;
+    const unavailableDepls = dList.filter(d => d.health !== 'Healthy').length;
+    const notReadyNodes = simNodes.filter(n => n.status !== 'Ready').length;
+
+    let health = 'Healthy';
+    if (notReadyNodes > 0 || failedPods > 2) {
+      health = 'Critical';
+    } else if (failedPods > 0 || pendingPods > 0 || unavailableDepls > 0) {
+      health = 'Warning';
+    }
+
     return {
+      health,
       pods: {
-        running: simPods.filter(p => p.status === 'Running').length,
-        pending: simPods.filter(p => p.status === 'Pending').length,
-        failed: simPods.filter(p => p.status === 'CrashLoopBackOff').length,
-        completed: simPods.filter(p => p.status === 'Completed').length
+        running: pList.filter(p => p.status === 'Running').length,
+        pending: pendingPods,
+        failed: failedPods,
+        completed: pList.filter(p => p.status === 'Completed').length
       },
       deployments: {
-        available: simDeployments.filter(d => d.health === 'Healthy').length,
-        unavailable: simDeployments.filter(d => d.health !== 'Healthy').length
+        available: dList.filter(d => d.health === 'Healthy').length,
+        unavailable: unavailableDepls
       },
       nodes: {
         ready: simNodes.filter(n => n.status === 'Ready').length,
-        notReady: simNodes.filter(n => n.status !== 'Ready').length
+        notReady: notReadyNodes
       },
       services: {
-        clusterIP: simServices.filter(s => s.type === 'ClusterIP').length,
-        nodePort: simServices.filter(s => s.type === 'NodePort').length,
-        loadBalancer: simServices.filter(s => s.type === 'LoadBalancer').length,
-        externalName: simServices.filter(s => s.type === 'ExternalName').length,
-        total: simServices.length
+        clusterIP: sList.filter(s => s.type === 'ClusterIP').length,
+        nodePort: sList.filter(s => s.type === 'NodePort').length,
+        loadBalancer: sList.filter(s => s.type === 'LoadBalancer').length,
+        externalName: sList.filter(s => s.type === 'ExternalName').length,
+        total: sList.length
       }
     };
   },
@@ -718,52 +843,517 @@ export const k8sService = {
     throw new Error(`Service "${name}" in namespace "${namespace}" not found.`);
   },
 
-  // RBAC Roles query
-  getRoles: async () => {
+  // ============================================================================
+  // RBAC MODULE METHODS (Roles, RoleBindings, ServiceAccounts)
+  // ============================================================================
+
+  // Roles List
+  getRoles: async (namespace = '') => {
     if (isClusterHealthy) {
-      const res = await rbacApi.listClusterRole();
-      return res.body.items.map(r => ({
-        name: r.metadata?.name || '',
-        namespace: r.metadata?.namespace || 'Cluster Scope',
-        createdDate: r.metadata?.creationTimestamp || new Date(),
-        permissions: r.rules?.map(rule => `${rule.resources?.join(',') || '*'} (${rule.verbs?.join(',')})`).slice(0, 2).join('; ') || ''
-      }));
+      try {
+        const res = namespace 
+          ? await rbacApi.listNamespacedRole(namespace)
+          : await rbacApi.listRoleForAllNamespaces();
+        
+        return res.body.items.map(r => ({
+          name: r.metadata?.name || '',
+          namespace: r.metadata?.namespace || 'Cluster Scope',
+          createdDate: r.metadata?.creationTimestamp || new Date(),
+          rulesCount: r.rules?.length || 0,
+          rules: r.rules || [],
+          labels: r.metadata?.labels || {}
+        }));
+      } catch (err) {
+        // Fallback to cluster roles list if namespace query fails
+        const res = await rbacApi.listClusterRole();
+        return res.body.items.map(r => ({
+          name: r.metadata?.name || '',
+          namespace: r.metadata?.namespace || 'Cluster Scope',
+          createdDate: r.metadata?.creationTimestamp || new Date(),
+          rulesCount: r.rules?.length || 0,
+          rules: r.rules || [],
+          labels: r.metadata?.labels || {}
+        }));
+      }
     }
 
     // Simulator Fallback
-    return simRbac.roles;
+    let list = [...simRbac.roles];
+    if (namespace && namespace !== 'All Namespaces') {
+      list = list.filter(r => r.namespace === namespace || r.namespace === 'Cluster Scope');
+    }
+    return list;
   },
 
-  // RBAC Role Bindings query
-  getRoleBindings: async () => {
+  // Role Detail
+  getRoleDetail: async (namespace, name) => {
     if (isClusterHealthy) {
-      const res = await rbacApi.listClusterRoleBinding();
-      return res.body.items.map(b => ({
+      try {
+        const res = (namespace && namespace !== 'Cluster Scope') 
+          ? await rbacApi.readNamespacedRole(name, namespace)
+          : await rbacApi.readClusterRole(name);
+        
+        const r = res.body;
+        return {
+          name: r.metadata?.name || '',
+          namespace: r.metadata?.namespace || 'Cluster Scope',
+          createdDate: r.metadata?.creationTimestamp || new Date(),
+          rulesCount: r.rules?.length || 0,
+          rules: r.rules || [],
+          labels: r.metadata?.labels || {},
+          annotations: r.metadata?.annotations || {}
+        };
+      } catch (err) {
+        throw new Error(`Failed to read Role "${name}": ${err.message}`);
+      }
+    }
+
+    const role = simRbac.roles.find(r => r.name === name && (!namespace || namespace === 'All Namespaces' || r.namespace === namespace));
+    if (!role) throw new Error(`Role "${name}" not found.`);
+    return role;
+  },
+
+  // Role YAML
+  getRoleYaml: async (namespace, name) => {
+    if (isClusterHealthy) {
+      try {
+        const res = (namespace && namespace !== 'Cluster Scope')
+          ? await rbacApi.readNamespacedRole(name, namespace)
+          : await rbacApi.readClusterRole(name);
+        return res.body;
+      } catch (err) {
+        throw new Error(`Failed to fetch Role YAML: ${err.message}`);
+      }
+    }
+
+    const role = simRbac.roles.find(r => r.name === name && (!namespace || namespace === 'All Namespaces' || r.namespace === namespace));
+    if (!role) throw new Error(`Role "${name}" not found.`);
+
+    return {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: role.namespace === 'Cluster Scope' ? 'ClusterRole' : 'Role',
+      metadata: {
+        name: role.name,
+        namespace: role.namespace !== 'Cluster Scope' ? role.namespace : undefined,
+        creationTimestamp: role.createdDate,
+        labels: role.labels || {}
+      },
+      rules: role.rules || []
+    };
+  },
+
+  // Create Role
+  createRole: async (namespace, roleData) => {
+    if (isClusterHealthy) {
+      const manifest = roleData.kind ? roleData : {
+        apiVersion: 'rbac.authorization.k8s.io/v1',
+        kind: roleData.isClusterRole ? 'ClusterRole' : 'Role',
+        metadata: {
+          name: roleData.name,
+          namespace: roleData.isClusterRole ? undefined : (namespace || roleData.namespace || 'default'),
+          labels: roleData.labels || {}
+        },
+        rules: roleData.rules || []
+      };
+
+      const res = manifest.kind === 'ClusterRole'
+        ? await rbacApi.createClusterRole(manifest)
+        : await rbacApi.createNamespacedRole(manifest.metadata.namespace, manifest);
+      
+      return res.body;
+    }
+
+    // Simulator Fallback
+    const name = roleData.name || roleData.metadata?.name;
+    const ns = roleData.isClusterRole ? 'Cluster Scope' : (namespace || roleData.namespace || roleData.metadata?.namespace || 'default');
+    const rules = roleData.rules || roleData.spec?.rules || [];
+
+    const newRole = {
+      name,
+      namespace: ns,
+      createdDate: new Date().toISOString(),
+      rulesCount: rules.length,
+      rules,
+      labels: roleData.labels || { app: name }
+    };
+
+    simRbac.roles.unshift(newRole);
+    return newRole;
+  },
+
+  // Update Role
+  updateRole: async (namespace, name, updateData) => {
+    if (isClusterHealthy) {
+      const isNamespaced = namespace && namespace !== 'Cluster Scope';
+      const existing = isNamespaced
+        ? await rbacApi.readNamespacedRole(name, namespace)
+        : await rbacApi.readClusterRole(name);
+      
+      const manifest = existing.body;
+      if (updateData.rules) manifest.rules = updateData.rules;
+      if (updateData.labels) manifest.metadata.labels = updateData.labels;
+
+      const res = isNamespaced
+        ? await rbacApi.replaceNamespacedRole(name, namespace, manifest)
+        : await rbacApi.replaceClusterRole(name, manifest);
+      
+      return res.body;
+    }
+
+    // Simulator Fallback
+    const idx = simRbac.roles.findIndex(r => r.name === name && (!namespace || namespace === 'All Namespaces' || r.namespace === namespace));
+    if (idx === -1) throw new Error(`Role "${name}" not found.`);
+    if (updateData.rules) {
+      simRbac.roles[idx].rules = updateData.rules;
+      simRbac.roles[idx].rulesCount = updateData.rules.length;
+    }
+    if (updateData.labels) simRbac.roles[idx].labels = updateData.labels;
+    return simRbac.roles[idx];
+  },
+
+  // Delete Role
+  deleteRole: async (namespace, name) => {
+    if (isClusterHealthy) {
+      if (namespace && namespace !== 'Cluster Scope') {
+        await rbacApi.deleteNamespacedRole(name, namespace);
+      } else {
+        await rbacApi.deleteClusterRole(name);
+      }
+      return true;
+    }
+
+    // Simulator Fallback
+    const idx = simRbac.roles.findIndex(r => r.name === name && (!namespace || namespace === 'All Namespaces' || r.namespace === namespace));
+    if (idx !== -1) {
+      simRbac.roles.splice(idx, 1);
+      return true;
+    }
+    throw new Error(`Role "${name}" not found.`);
+  },
+
+  // RoleBindings List
+  getRoleBindings: async (namespace = '') => {
+    if (isClusterHealthy) {
+      try {
+        const res = namespace 
+          ? await rbacApi.listNamespacedRoleBinding(namespace)
+          : await rbacApi.listRoleBindingForAllNamespaces();
+
+        return res.body.items.map(b => ({
+          name: b.metadata?.name || '',
+          namespace: b.metadata?.namespace || 'Cluster Scope',
+          createdDate: b.metadata?.creationTimestamp || new Date(),
+          roleRef: b.roleRef || {},
+          subjects: b.subjects || [],
+          labels: b.metadata?.labels || {}
+        }));
+      } catch (err) {
+        const res = await rbacApi.listClusterRoleBinding();
+        return res.body.items.map(b => ({
+          name: b.metadata?.name || '',
+          namespace: b.metadata?.namespace || 'Cluster Scope',
+          createdDate: b.metadata?.creationTimestamp || new Date(),
+          roleRef: b.roleRef || {},
+          subjects: b.subjects || [],
+          labels: b.metadata?.labels || {}
+        }));
+      }
+    }
+
+    // Simulator Fallback
+    let list = [...simRbac.bindings];
+    if (namespace && namespace !== 'All Namespaces') {
+      list = list.filter(b => b.namespace === namespace || b.namespace === 'Cluster Scope');
+    }
+    return list;
+  },
+
+  // RoleBinding Detail
+  getRoleBindingDetail: async (namespace, name) => {
+    if (isClusterHealthy) {
+      const res = (namespace && namespace !== 'Cluster Scope')
+        ? await rbacApi.readNamespacedRoleBinding(name, namespace)
+        : await rbacApi.readClusterRoleBinding(name);
+      
+      const b = res.body;
+      return {
         name: b.metadata?.name || '',
         namespace: b.metadata?.namespace || 'Cluster Scope',
         createdDate: b.metadata?.creationTimestamp || new Date(),
-        permissions: `RoleRef: ${b.roleRef?.name}, Subject: ${b.subjects?.[0]?.kind}(${b.subjects?.[0]?.name})`
-      }));
+        roleRef: b.roleRef || {},
+        subjects: b.subjects || [],
+        labels: b.metadata?.labels || {}
+      };
+    }
+
+    const binding = simRbac.bindings.find(b => b.name === name && (!namespace || namespace === 'All Namespaces' || b.namespace === namespace));
+    if (!binding) throw new Error(`RoleBinding "${name}" not found.`);
+    return binding;
+  },
+
+  // RoleBinding YAML
+  getRoleBindingYaml: async (namespace, name) => {
+    if (isClusterHealthy) {
+      const res = (namespace && namespace !== 'Cluster Scope')
+        ? await rbacApi.readNamespacedRoleBinding(name, namespace)
+        : await rbacApi.readClusterRoleBinding(name);
+      return res.body;
+    }
+
+    const binding = simRbac.bindings.find(b => b.name === name && (!namespace || namespace === 'All Namespaces' || b.namespace === namespace));
+    if (!binding) throw new Error(`RoleBinding "${name}" not found.`);
+
+    return {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: binding.namespace === 'Cluster Scope' ? 'ClusterRoleBinding' : 'RoleBinding',
+      metadata: {
+        name: binding.name,
+        namespace: binding.namespace !== 'Cluster Scope' ? binding.namespace : undefined,
+        creationTimestamp: binding.createdDate,
+        labels: binding.labels || {}
+      },
+      roleRef: binding.roleRef,
+      subjects: binding.subjects || []
+    };
+  },
+
+  // Create RoleBinding
+  createRoleBinding: async (namespace, bindingData) => {
+    if (isClusterHealthy) {
+      const manifest = bindingData.kind ? bindingData : {
+        apiVersion: 'rbac.authorization.k8s.io/v1',
+        kind: bindingData.isClusterRoleBinding ? 'ClusterRoleBinding' : 'RoleBinding',
+        metadata: {
+          name: bindingData.name,
+          namespace: bindingData.isClusterRoleBinding ? undefined : (namespace || bindingData.namespace || 'default'),
+          labels: bindingData.labels || {}
+        },
+        roleRef: {
+          apiGroup: 'rbac.authorization.k8s.io',
+          kind: bindingData.roleRefKind || 'Role',
+          name: bindingData.roleRefName
+        },
+        subjects: bindingData.subjects || []
+      };
+
+      const res = manifest.kind === 'ClusterRoleBinding'
+        ? await rbacApi.createClusterRoleBinding(manifest)
+        : await rbacApi.createNamespacedRoleBinding(manifest.metadata.namespace, manifest);
+      
+      return res.body;
     }
 
     // Simulator Fallback
-    return simRbac.bindings;
+    const name = bindingData.name || bindingData.metadata?.name;
+    const ns = bindingData.isClusterRoleBinding ? 'Cluster Scope' : (namespace || bindingData.namespace || bindingData.metadata?.namespace || 'default');
+
+    const newBinding = {
+      name,
+      namespace: ns,
+      createdDate: new Date().toISOString(),
+      roleRef: bindingData.roleRef || {
+        kind: bindingData.roleRefKind || 'Role',
+        name: bindingData.roleRefName || 'pod-reader',
+        apiGroup: 'rbac.authorization.k8s.io'
+      },
+      subjects: bindingData.subjects || [
+        { kind: 'User', name: 'developer', namespace: ns }
+      ],
+      labels: bindingData.labels || { app: name }
+    };
+
+    simRbac.bindings.unshift(newBinding);
+    return newBinding;
   },
 
-  // RBAC Service Accounts query
-  getServiceAccounts: async () => {
+  // Update RoleBinding
+  updateRoleBinding: async (namespace, name, updateData) => {
     if (isClusterHealthy) {
-      const res = await k8sApi.listServiceAccountForAllNamespaces();
+      const isNamespaced = namespace && namespace !== 'Cluster Scope';
+      const existing = isNamespaced
+        ? await rbacApi.readNamespacedRoleBinding(name, namespace)
+        : await rbacApi.readClusterRoleBinding(name);
+
+      const manifest = existing.body;
+      if (updateData.roleRef) manifest.roleRef = updateData.roleRef;
+      if (updateData.subjects) manifest.subjects = updateData.subjects;
+      if (updateData.labels) manifest.metadata.labels = updateData.labels;
+
+      const res = isNamespaced
+        ? await rbacApi.replaceNamespacedRoleBinding(name, namespace, manifest)
+        : await rbacApi.replaceClusterRoleBinding(name, manifest);
+
+      return res.body;
+    }
+
+    // Simulator Fallback
+    const idx = simRbac.bindings.findIndex(b => b.name === name && (!namespace || namespace === 'All Namespaces' || b.namespace === namespace));
+    if (idx === -1) throw new Error(`RoleBinding "${name}" not found.`);
+    if (updateData.roleRef) simRbac.bindings[idx].roleRef = updateData.roleRef;
+    if (updateData.subjects) simRbac.bindings[idx].subjects = updateData.subjects;
+    if (updateData.labels) simRbac.bindings[idx].labels = updateData.labels;
+    return simRbac.bindings[idx];
+  },
+
+  // Delete RoleBinding
+  deleteRoleBinding: async (namespace, name) => {
+    if (isClusterHealthy) {
+      if (namespace && namespace !== 'Cluster Scope') {
+        await rbacApi.deleteNamespacedRoleBinding(name, namespace);
+      } else {
+        await rbacApi.deleteClusterRoleBinding(name);
+      }
+      return true;
+    }
+
+    // Simulator Fallback
+    const idx = simRbac.bindings.findIndex(b => b.name === name && (!namespace || namespace === 'All Namespaces' || b.namespace === namespace));
+    if (idx !== -1) {
+      simRbac.bindings.splice(idx, 1);
+      return true;
+    }
+    throw new Error(`RoleBinding "${name}" not found.`);
+  },
+
+  // Service Accounts List
+  getServiceAccounts: async (namespace = '') => {
+    if (isClusterHealthy) {
+      const res = namespace
+        ? await k8sApi.listNamespacedServiceAccount(namespace)
+        : await k8sApi.listServiceAccountForAllNamespaces();
+
       return res.body.items.map(sa => ({
         name: sa.metadata?.name || '',
         namespace: sa.metadata?.namespace || '',
         createdDate: sa.metadata?.creationTimestamp || new Date(),
-        permissions: `Secrets: ${sa.secrets?.map(s => s.name).join(', ') || '[none]'}`
+        secrets: sa.secrets || [],
+        imagePullSecrets: sa.imagePullSecrets || [],
+        labels: sa.metadata?.labels || {}
       }));
     }
 
     // Simulator Fallback
-    return simRbac.serviceAccounts;
+    let list = [...simRbac.serviceAccounts];
+    if (namespace && namespace !== 'All Namespaces') {
+      list = list.filter(sa => sa.namespace === namespace);
+    }
+    return list;
+  },
+
+  // Service Account Detail
+  getServiceAccountDetail: async (namespace, name) => {
+    if (isClusterHealthy) {
+      const res = await k8sApi.readNamespacedServiceAccount(name, namespace || 'default');
+      const sa = res.body;
+      return {
+        name: sa.metadata?.name || '',
+        namespace: sa.metadata?.namespace || '',
+        createdDate: sa.metadata?.creationTimestamp || new Date(),
+        secrets: sa.secrets || [],
+        imagePullSecrets: sa.imagePullSecrets || [],
+        labels: sa.metadata?.labels || {}
+      };
+    }
+
+    const sa = simRbac.serviceAccounts.find(s => s.name === name && (!namespace || namespace === 'All Namespaces' || s.namespace === namespace));
+    if (!sa) throw new Error(`ServiceAccount "${name}" not found.`);
+    return sa;
+  },
+
+  // Service Account YAML
+  getServiceAccountYaml: async (namespace, name) => {
+    if (isClusterHealthy) {
+      const res = await k8sApi.readNamespacedServiceAccount(name, namespace || 'default');
+      return res.body;
+    }
+
+    const sa = simRbac.serviceAccounts.find(s => s.name === name && (!namespace || namespace === 'All Namespaces' || s.namespace === namespace));
+    if (!sa) throw new Error(`ServiceAccount "${name}" not found.`);
+
+    return {
+      apiVersion: 'v1',
+      kind: 'ServiceAccount',
+      metadata: {
+        name: sa.name,
+        namespace: sa.namespace,
+        creationTimestamp: sa.createdDate,
+        labels: sa.labels || {}
+      },
+      secrets: sa.secrets || [],
+      imagePullSecrets: sa.imagePullSecrets || []
+    };
+  },
+
+  // Create Service Account
+  createServiceAccount: async (namespace, saData) => {
+    if (isClusterHealthy) {
+      const manifest = saData.kind ? saData : {
+        apiVersion: 'v1',
+        kind: 'ServiceAccount',
+        metadata: {
+          name: saData.name,
+          namespace: namespace || saData.namespace || 'default',
+          labels: saData.labels || {}
+        },
+        imagePullSecrets: saData.imagePullSecrets || []
+      };
+
+      const res = await k8sApi.createNamespacedServiceAccount(manifest.metadata.namespace, manifest);
+      return res.body;
+    }
+
+    // Simulator Fallback
+    const name = saData.name || saData.metadata?.name;
+    const ns = namespace || saData.namespace || saData.metadata?.namespace || 'default';
+
+    const newSa = {
+      name,
+      namespace: ns,
+      createdDate: new Date().toISOString(),
+      secrets: [{ name: `${name}-token-${Math.random().toString(36).substring(2, 7)}` }],
+      imagePullSecrets: saData.imagePullSecrets || [],
+      labels: saData.labels || { app: name }
+    };
+
+    simRbac.serviceAccounts.unshift(newSa);
+    return newSa;
+  },
+
+  // Update Service Account
+  updateServiceAccount: async (namespace, name, updateData) => {
+    if (isClusterHealthy) {
+      const existing = await k8sApi.readNamespacedServiceAccount(name, namespace || 'default');
+      const manifest = existing.body;
+
+      if (updateData.labels) manifest.metadata.labels = updateData.labels;
+      if (updateData.imagePullSecrets) manifest.imagePullSecrets = updateData.imagePullSecrets;
+
+      const res = await k8sApi.replaceNamespacedServiceAccount(name, namespace || 'default', manifest);
+      return res.body;
+    }
+
+    // Simulator Fallback
+    const idx = simRbac.serviceAccounts.findIndex(s => s.name === name && (!namespace || namespace === 'All Namespaces' || s.namespace === namespace));
+    if (idx === -1) throw new Error(`ServiceAccount "${name}" not found.`);
+    if (updateData.labels) simRbac.serviceAccounts[idx].labels = updateData.labels;
+    if (updateData.imagePullSecrets) simRbac.serviceAccounts[idx].imagePullSecrets = updateData.imagePullSecrets;
+    return simRbac.serviceAccounts[idx];
+  },
+
+  // Delete Service Account
+  deleteServiceAccount: async (namespace, name) => {
+    if (isClusterHealthy) {
+      await k8sApi.deleteNamespacedServiceAccount(name, namespace || 'default');
+      return true;
+    }
+
+    // Simulator Fallback
+    const idx = simRbac.serviceAccounts.findIndex(s => s.name === name && (!namespace || namespace === 'All Namespaces' || s.namespace === namespace));
+    if (idx !== -1) {
+      simRbac.serviceAccounts.splice(idx, 1);
+      return true;
+    }
+    throw new Error(`ServiceAccount "${name}" not found.`);
   },
 
   // System Event logs query
